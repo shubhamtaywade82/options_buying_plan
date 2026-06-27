@@ -160,11 +160,54 @@
 
 ---
 
+## Tasks — Execution Modes
+*(Append after the 14 numbered tasks and before the Acceptance Criteria section)*
+
+### Task 15. Create `ExecutionGateway` interface
+- **File:** `app/engines/execution/gateway.rb`
+- **Interface:** `execute(input) -> ExecutionOutput`
+- **Responsibilities:**
+  - Owned by ExecutionEngine; delegates to the active mode adapter.
+  - Resolves adapter from container based on configured execution mode.
+  - Exposes adapter needed for testing/circuit breaking.
+- **Implementations:**
+  - `BacktestAdapter` — consumes historical tick/candle replay; produces virtual orders/positions.
+  - `PaperAdapter` — consumes live market data, runs virtual broker + matching engine; never hits real `/orders`.
+  - `LiveAdapter` — delegates to DhanHQ broker gateway.
+- **Deliverable:** Gateway + three adapters.
+- **Acceptance Criteria:**
+  - `ExecutionEngine` calls `gateway.execute(input)` in all cases.
+  - Mode can be switched by config, not by changing engine code.
+  - Tests swap adapters without touching engine logic.
+- **Commit:** `feat: add execution gateway with live, paper, and backtest adapters`
+
+### Task 15.1: BacktestAdapter details
+- Use `ReplayClock` and historical data repositories from M0.3/M0.4.
+- Queue ticks through the same EventBus channels as live/paper.
+- Produce `ExecutionOutput` with fill prices derived from historical data.
+- No WebSocket/REST broker calls.
+
+### Task 15.2: PaperAdapter details
+- Use `LiveClock` and live repositories (same as live mode).
+- Virtual broker maintains local orderbook, queue, and fill simulation.
+- Matching engine models spread, partial fills, queue position, rejections, and price improvement.
+- Portfolio/pnl/positions track cash, margin, unrealized and realized PnL.
+- Include realistic costs: brokerage, STT, GST, SEBI charges, stamp duty.
+- No DhanHQ REST `/orders` or WebSocket order updates.
+
+### Task 15.3: LiveAdapter details
+- Thin wrapper around broker gateway from M0.4.
+- Maps `ExecutionOutput` shapes to broker responses.
+- Preserves all retry, partial fill, reconciliation, and journaling behavior already defined in Tasks 2–14.
+- WebSocket order updates remain source of truth.
+
+---
+
+
+
 ## Notes
-- All execution goes through ExecutionEngine (single entry point)
-- Limit orders only for entries (no market orders for buying options)
-- Order slicing prevents market impact on large orders
-- Idempotency keys prevent duplicate orders on retry
-- WebSocket order updates are source of truth for state
-- Reconciliation job catches any WebSocket gaps
-- Paper trading mode uses same engine with PaperBroker
+- Execution Mode is selected at boot from AppConfig / ENV (`execution.mode` = `live|paper|backtest|replay`).
+- Everything before the ExecutionGateway is identical across modes.
+- The only code path that changes between live/paper/backtest is the adapter inside M6.2.
+- Paper mode is not a best-effort simulation; it uses the same risk, scoring, and sizing as live.
+- Replay mode is a first-class mode separate from backtest because it replays live-speed streams (1x/2x/5x/10x/100x/1000x) through the same intake path used by live and paper.

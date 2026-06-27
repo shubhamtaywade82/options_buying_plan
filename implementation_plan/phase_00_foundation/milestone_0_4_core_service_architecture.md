@@ -258,6 +258,41 @@
 
 
 
+## Day 35.5 — Execution Mode Adapter Contract
+*(Insert after `Day 35 — DI Container + dry-container Integration` and before `Day 36 — Engine Interfaces`)*
+
+### Task 35.4: Define ExecutionGateway interface and execution modes
+- **Context:** Paper trading must be a mode, not a separate module. The same strategy/risk path feeds all modes.
+- **File:** Define protocol in architecture docs; implementation in Phase 6.
+- **Interface:** `execute(input) -> ExecutionOutput`
+- **Modes:** `:live`, `:paper`, `:backtest`, `:replay`
+- **Contract:**
+  - Input shape is identical across modes.
+  - Output shape is identical across modes.
+  - Only the broker/data adapter changes.
+- **Configuration:** Single source of truth for current mode (ENV / AppConfig), loaded by the DI container.
+- **Deliverable:** Architecture contract that M6.2 implements.
+- **Acceptance Criteria:**
+  - All future engines reference `ExecutionGateway`, never a concrete broker class directly.
+  - Mode switching does not require code changes.
+  - Documented in `docs/architecture.md`.
+
+### Task 35.5: Freeze shared invariants for mode parity
+- **Invariants:**
+  - Order model is the same across modes.
+  - Risk checks run before any mode adapter.
+  - Slippage model is mode-aware but schema-stable.
+  - Event bus payloads for `OrderSubmitted`, `OrderFilled`, `PositionUpdated` are unaffected by mode.
+- **Deliverable:** Invariants list in milestone doc.
+- **Acceptance Criteria:**
+  - No mode implements its own order schema.
+  - No mode bypasses RiskValidationEngine.
+- **Commit:** `docs: freeze execution mode parity invariants`
+
+---
+
+
+
 ## Day 36 — Engine Interfaces
 
 ### Task 36.1: Define `app/engines/base_engine.rb`
